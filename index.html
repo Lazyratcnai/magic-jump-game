@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>✨ 魔法跳跃 Magic Jump</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700;900&display=swap');
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: radial-gradient(ellipse at center, #1a0a3e 0%, #0a0014 60%, #000 100%);
+            font-family: 'Noto Sans SC', 'Arial', sans-serif;
+            overflow: hidden;
+        }
+
+        /* 背景动态粒子 */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                radial-gradient(1px 1px at 10% 20%, rgba(255,255,255,0.3) 0%, transparent 100%),
+                radial-gradient(1px 1px at 30% 60%, rgba(200,180,255,0.2) 0%, transparent 100%),
+                radial-gradient(1px 1px at 70% 15%, rgba(255,255,255,0.2) 0%, transparent 100%),
+                radial-gradient(1px 1px at 85% 70%, rgba(200,180,255,0.3) 0%, transparent 100%),
+                radial-gradient(1px 1px at 50% 85%, rgba(255,255,255,0.2) 0%, transparent 100%);
+            pointer-events: none;
+        }
+
+        #gameContainer {
+            position: relative;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow:
+                0 0 0 1px rgba(167, 139, 250, 0.3),
+                0 0 40px rgba(109, 40, 217, 0.5),
+                0 0 80px rgba(109, 40, 217, 0.2),
+                0 20px 60px rgba(0, 0, 0, 0.8);
+        }
+
+        canvas { display: block; }
+
+        /* ===== HUD ===== */
+        #ui {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            padding: 6px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .ui-left, .ui-right { display: flex; gap: 8px; align-items: center; }
+
+        .ui-item {
+            background: rgba(0,0,0,0.55);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(167,139,250,0.25);
+            padding: 4px 12px;
+            border-radius: 20px;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .ui-item .label {
+            font-size: 10px;
+            color: rgba(255,255,255,0.5);
+            font-weight: 400;
+        }
+
+        /* ===== 技能面板 ===== */
+        #skillPanel {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            display: flex;
+            gap: 8px;
+            z-index: 10;
+        }
+
+        .skill-slot {
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(6px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 8px 10px;
+            color: #fff;
+            font-size: 11px;
+            min-width: 72px;
+            transition: opacity 0.3s, border-color 0.3s;
+        }
+
+        .skill-slot.locked { opacity: 0.35; }
+
+        .skill-name { font-weight: 700; margin-bottom: 2px; font-size: 12px; }
+        .skill-key {
+            font-size: 9px;
+            color: rgba(255,255,255,0.4);
+            margin-bottom: 4px;
+        }
+
+        .energy-bar {
+            width: 100%;
+            height: 5px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .energy-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.15s, background 0.3s;
+        }
+
+        /* ===== 道具 ===== */
+        #activePowerups {
+            position: absolute;
+            bottom: 68px;
+            right: 12px;
+            display: flex;
+            gap: 5px;
+            flex-direction: column;
+            align-items: flex-end;
+            max-width: 130px;
+            z-index: 10;
+        }
+
+        .powerup-badge-v2 {
+            color: #fff;
+            padding: 4px 8px 10px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 700;
+            white-space: nowrap;
+            background: rgba(0,0,0,0.6);
+            border: 1.5px solid;
+            display: flex;
+            gap: 5px;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+            min-width: 90px;
+        }
+
+        .powerup-timer-bar {
+            position: absolute;
+            bottom: 0; left: 0;
+            height: 3px;
+            border-radius: 0 0 8px 8px;
+            transition: width 0.3s linear;
+            max-width: 100%;
+        }
+
+        /* ===== 音效控制 ===== */
+        #audioControls {
+            position: absolute;
+            top: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 6px;
+            z-index: 20;
+            pointer-events: all;
+        }
+
+        .audio-btn {
+            background: rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, transform 0.1s;
+            backdrop-filter: blur(4px);
+        }
+
+        .audio-btn:hover {
+            background: rgba(255,255,255,0.15);
+            transform: scale(1.1);
+        }
+
+        /* ===== 通用屏幕 ===== */
+        .screen {
+            position: absolute;
+            inset: 0;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+            background: radial-gradient(ellipse at center, rgba(30,10,60,0.95) 0%, rgba(0,0,0,0.92) 100%);
+            backdrop-filter: blur(4px);
+        }
+        
+        /* 成长系统布局 */
+        #growthScreen {
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            overflow-y: auto;
+            padding-top: 10px;
+            padding-bottom: 10px;
+            box-sizing: border-box;
+        }
+        
+        /* 成长系统卡片横向布局 */
+        #growthScreen .growth-grid {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: nowrap;
+            justify-content: center;
+            align-items: stretch;
+            gap: 6px;
+            margin: 0;
+            padding: 0 10px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        
+        #growthScreen .growth-card {
+            flex: 1 1 0;
+            min-width: 0;
+            max-width: none;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 8px 4px;
+            border-radius: 8px;
+        }
+
+        .screen-title {
+            font-size: 48px;
+            font-weight: 900;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #c084fc, #f59e0b, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: none;
+            letter-spacing: 2px;
+            filter: drop-shadow(0 0 20px rgba(192,132,252,0.5));
+        }
+
+        .screen-subtitle {
+            font-size: 14px;
+            color: rgba(255,255,255,0.45);
+            margin-bottom: 28px;
+            letter-spacing: 2px;
+        }
+
+        /* ===== 按钮 ===== */
+        .btn {
+            padding: 14px 36px;
+            font-size: 16px;
+            font-weight: 700;
+            font-family: inherit;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            margin: 6px;
+            transition: transform 0.15s, box-shadow 0.15s;
+            letter-spacing: 1px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(255,255,255,0.08);
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+
+        .btn:hover::after { opacity: 1; }
+        .btn:hover { transform: translateY(-2px) scale(1.03); }
+        .btn:active { transform: translateY(0) scale(0.98); }
+
+        .btn-purple {
+            background: linear-gradient(135deg, #7c3aed, #9333ea);
+            color: #fff;
+            box-shadow: 0 4px 20px rgba(124,58,237,0.5), 0 0 0 1px rgba(167,139,250,0.3);
+        }
+
+        .btn-orange {
+            background: linear-gradient(135deg, #d97706, #f59e0b);
+            color: #fff;
+            box-shadow: 0 4px 20px rgba(245,158,11,0.4), 0 0 0 1px rgba(251,191,36,0.3);
+        }
+
+        .btn-green {
+            background: linear-gradient(135deg, #059669, #10b981);
+            color: #fff;
+            box-shadow: 0 4px 20px rgba(16,185,129,0.4);
+        }
+
+        .btn-ghost {
+            background: rgba(255,255,255,0.07);
+            color: rgba(255,255,255,0.7);
+            box-shadow: 0 0 0 1px rgba(255,255,255,0.15);
+        }
+
+        .btn:disabled {
+            background: rgba(255,255,255,0.08) !important;
+            color: rgba(255,255,255,0.3) !important;
+            box-shadow: none !important;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        /* ===== 关卡选择 ===== */
+        .level-grid { display: flex; gap: 16px; margin: 20px 0; }
+
+        .level-card {
+            width: 130px;
+            height: 130px;
+            border-radius: 18px;
+            border: 2px solid;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+            background: rgba(255,255,255,0.04);
+            backdrop-filter: blur(4px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .level-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at 50% 30%, rgba(255,255,255,0.06) 0%, transparent 70%);
+        }
+
+        .level-card:hover:not(.locked) {
+            transform: translateY(-4px) scale(1.04);
+        }
+
+        .level-card.locked {
+            opacity: 0.4;
+            cursor: not-allowed;
+            filter: grayscale(0.6);
+        }
+
+        .level-card.forest { border-color: #22c55e; box-shadow: 0 0 20px rgba(34,197,94,0.2); }
+        .level-card.desert { border-color: #f59e0b; box-shadow: 0 0 20px rgba(245,158,11,0.2); }
+        .level-card.ice    { border-color: #38bdf8; box-shadow: 0 0 20px rgba(56,189,248,0.2); }
+
+        .level-card:hover.forest { box-shadow: 0 0 30px rgba(34,197,94,0.4); }
+        .level-card:hover.desert { box-shadow: 0 0 30px rgba(245,158,11,0.4); }
+        .level-card:hover.ice    { box-shadow: 0 0 30px rgba(56,189,248,0.4); }
+
+        .level-icon { font-size: 44px; margin-bottom: 6px; }
+        .level-name { font-size: 13px; font-weight: 700; color: #fff; }
+        .level-sub  { font-size: 10px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+
+        .lock-icon {
+            position: absolute;
+            top: 8px; right: 8px;
+            font-size: 16px;
+        }
+
+        /* ===== 商店 ===== */
+        .shop-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .shop-stars {
+            font-size: 28px;
+            font-weight: 900;
+            color: #fbbf24;
+        }
+
+        .shop-grid {
+            display: flex;
+            gap: 14px;
+            margin: 8px 0 20px;
+        }
+
+        .shop-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 16px;
+            padding: 18px 16px;
+            text-align: center;
+            min-width: 140px;
+            transition: border-color 0.2s;
+        }
+
+        .shop-card:hover { border-color: rgba(255,255,255,0.25); }
+
+        .shop-card-icon { font-size: 36px; margin-bottom: 8px; }
+        .shop-card h3 { font-size: 15px; font-weight: 700; color: #c084fc; margin-bottom: 6px; }
+        .shop-card p  { font-size: 11px; color: rgba(255,255,255,0.45); margin-bottom: 12px; line-height: 1.5; }
+
+        .buy-skill-btn {
+            padding: 8px 16px;
+            font-size: 12px;
+            font-weight: 700;
+            font-family: inherit;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: #fff;
+            transition: transform 0.15s, opacity 0.15s;
+        }
+
+        .buy-skill-btn:hover:not(:disabled) { transform: scale(1.05); }
+
+        .buy-skill-btn:disabled {
+            background: linear-gradient(135deg, #27ae60, #16a34a) !important;
+            cursor: default;
+        }
+
+        /* ===== 结算屏幕 ===== */
+        .stats-row {
+            display: flex;
+            gap: 32px;
+            margin: 16px 0 24px;
+        }
+
+        .stat-card {
+            text-align: center;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 16px 24px;
+            min-width: 100px;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 900;
+            color: #fbbf24;
+            display: block;
+            line-height: 1.1;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: rgba(255,255,255,0.4);
+            margin-top: 4px;
+        }
+
+        .highscore-tag {
+            font-size: 11px;
+            color: #f59e0b;
+            background: rgba(245,158,11,0.15);
+            border: 1px solid rgba(245,158,11,0.3);
+            padding: 3px 10px;
+            border-radius: 20px;
+            margin-bottom: 16px;
+        }
+
+        /* ===== 操作说明 ===== */
+        .controls {
+            margin-top: 20px;
+            padding: 12px 20px;
+            background: rgba(255,255,255,0.04);
+            border-radius: 12px;
+            font-size: 11px;
+            color: rgba(255,255,255,0.4);
+            text-align: center;
+            line-height: 2;
+        }
+
+        kbd {
+            background: rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.2);
+            padding: 2px 7px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 11px;
+            color: rgba(255,255,255,0.7);
+        }
+
+        .btn-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+
+        /* ===== 分割线 ===== */
+        .divider {
+            width: 60px;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #7c3aed, transparent);
+            margin: 10px auto 18px;
+            border-radius: 2px;
+        }
+
+        /* ===== 成长系统 ===== */
+        .growth-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .level-badge {
+            font-size: 36px;
+            font-weight: 900;
+            color: #f59e0b;
+            text-shadow: 0 0 20px rgba(245, 158, 11, 0.5);
+            margin-bottom: 10px;
+        }
+
+        .exp-bar-container {
+            width: 300px;
+            margin: 0 auto 10px;
+        }
+
+        .exp-bar {
+            width: 100%;
+            height: 12px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 6px;
+            overflow: hidden;
+            margin-bottom: 5px;
+        }
+
+        .exp-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #f59e0b, #fbbf24);
+            border-radius: 6px;
+            transition: width 0.3s;
+        }
+
+        .exp-text {
+            font-size: 12px;
+            color: rgba(255,255,255,0.6);
+        }
+
+        .stat-points {
+            font-size: 16px;
+            color: #10b981;
+            font-weight: bold;
+        }
+
+        .growth-grid {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: nowrap;
+            justify-content: center;
+            align-items: stretch;
+            gap: 6px;
+            margin: 0;
+            padding: 0 10px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .growth-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 10px 4px;
+            text-align: center;
+            transition: border-color 0.2s, transform 0.2s;
+            flex: 1 1 0;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .growth-card:hover {
+            border-color: rgba(167,139,250,0.4);
+            transform: translateY(-2px);
+        }
+
+        .growth-card.maxed {
+            border-color: #10b981;
+            background: rgba(16,185,129,0.1);
+        }
+
+        .growth-icon {
+            font-size: 22px;
+            margin-bottom: 5px;
+        }
+
+        .growth-card h3 {
+            font-size: 11px;
+            color: #c084fc;
+            margin-bottom: 3px;
+            line-height: 1.2;
+        }
+
+        .growth-card p {
+            font-size: 9px;
+            color: rgba(255,255,255,0.5);
+            margin-bottom: 5px;
+            line-height: 1.3;
+        }
+
+        .growth-level {
+            font-size: 10px;
+            color: rgba(255,255,255,0.7);
+            margin-bottom: 5px;
+        }
+
+        .upgrade-btn {
+            padding: 4px 8px;
+            font-size: 9px;
+            font-weight: 700;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            background: linear-gradient(135deg, #7c3aed, #9333ea);
+            color: #fff;
+            transition: opacity 0.2s, transform 0.2s;
+            white-space: nowrap;
+            margin-top: auto;
+        }
+
+        .upgrade-btn:hover:not(:disabled) {
+            transform: scale(1.05);
+            opacity: 0.9;
+        }
+
+        .upgrade-btn:disabled {
+            background: #444;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+
+        @keyframes levelUpAnim {
+            0% { opacity: 0; transform: translateX(-50%) scale(0.5); }
+            20% { opacity: 1; transform: translateX(-50%) scale(1.1); }
+            100% { opacity: 0; transform: translateX(-50%) scale(1) translateY(-50px); }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="420"></canvas>
+
+        <!-- 音频控制 -->
+        <div id="audioControls">
+            <button class="audio-btn" id="bgmBtn" title="音乐开关">🎵</button>
+            <button class="audio-btn" id="sfxBtn" title="音效开关">🔊</button>
+        </div>
+
+        <!-- HUD -->
+        <div id="ui">
+            <div class="ui-left">
+                <div class="ui-item">⭐ <span id="score">0</span></div>
+                <div class="ui-item">💰 <span id="starCount">0</span></div>
+            </div>
+            <div class="ui-right">
+                <div class="ui-item">🏃 <span id="distance">0</span>m</div>
+            </div>
+        </div>
+
+        <!-- 技能面板 -->
+        <div id="skillPanel">
+            <div class="skill-slot locked" id="skill-doubleJump">
+                <div class="skill-name">二段跳</div>
+                <div class="skill-key">按 Z</div>
+                <div class="energy-bar">
+                    <div class="energy-fill" id="energy-doubleJump" style="width:100%; background:#3b82f6"></div>
+                </div>
+            </div>
+            <div class="skill-slot locked" id="skill-shield">
+                <div class="skill-name">护盾</div>
+                <div class="skill-key">按 X</div>
+                <div class="energy-bar">
+                    <div class="energy-fill" id="energy-shield" style="width:100%; background:#10b981"></div>
+                </div>
+            </div>
+            <div class="skill-slot locked" id="skill-dash">
+                <div class="skill-name">冲刺</div>
+                <div class="skill-key">按 C</div>
+                <div class="energy-bar">
+                    <div class="energy-fill" id="energy-dash" style="width:100%; background:#ef4444"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 道具状态 -->
+        <div id="activePowerups"></div>
+
+        <!-- ===== 主菜单 ===== -->
+        <div id="menuScreen" class="screen" style="display:flex">
+            <div class="screen-title">🧙‍♂️ 魔法跳跃</div>
+            <div class="screen-subtitle">MAGIC JUMP</div>
+            <div class="divider"></div>
+
+            <div class="level-grid">
+                <div class="level-card forest" data-level="forest">
+                    <div class="level-icon">🌲</div>
+                    <div class="level-name">魔法森林</div>
+                    <div class="level-sub">500m</div>
+                </div>
+                <div class="level-card desert locked" data-level="desert">
+                    <div class="level-icon">🏜️</div>
+                    <div class="level-name">炽热沙漠</div>
+                    <div class="level-sub">800m</div>
+                    <span class="lock-icon">🔒</span>
+                </div>
+                <div class="level-card ice locked" data-level="ice">
+                    <div class="level-icon">❄️</div>
+                    <div class="level-name">冰雪王国</div>
+                    <div class="level-sub">1000m</div>
+                    <span class="lock-icon">🔒</span>
+                </div>
+            </div>
+
+            <div class="btn-row">
+                <button class="btn btn-purple" id="startBtn">⚔️ 开始冒险</button>
+                <button class="btn btn-orange" id="shopBtn">✨ 技能商店</button>
+                <button class="btn btn-green" id="growthBtn">📈 角色成长</button>
+            </div>
+
+            <div class="controls">
+                <kbd>← →</kbd> 移动 &nbsp;|&nbsp; <kbd>空格</kbd> 跳跃<br>
+                <kbd>Z</kbd> 二段跳 &nbsp;|&nbsp; <kbd>X</kbd> 护盾 &nbsp;|&nbsp; <kbd>C</kbd> 冲刺
+            </div>
+        </div>
+
+        <!-- ===== 商店 ===== -->
+        <div id="shopScreen" class="screen" style="display:none">
+            <div class="screen-title" style="font-size:32px">✨ 技能商店</div>
+            <div class="divider"></div>
+            <div class="shop-header">
+                <div style="color:rgba(255,255,255,0.5); font-size:13px; margin-bottom:4px">持有星星</div>
+                <div class="shop-stars">⭐ <span id="shopStars">0</span></div>
+            </div>
+
+            <div class="shop-grid">
+                <div class="shop-card">
+                    <div class="shop-card-icon">💙</div>
+                    <h3>二段跳</h3>
+                    <p>在空中还能再跳一次，越过更高的障碍</p>
+                    <button class="buy-skill-btn" data-skill="doubleJump" id="buy-doubleJump">100 ⭐ 解锁</button>
+                </div>
+                <div class="shop-card">
+                    <div class="shop-card-icon">💚</div>
+                    <h3>魔法护盾</h3>
+                    <p>护盾可抵挡一次伤害，关键时刻救命</p>
+                    <button class="buy-skill-btn" data-skill="shield" id="buy-shield">150 ⭐ 解锁</button>
+                </div>
+                <div class="shop-card">
+                    <div class="shop-card-icon">❤️</div>
+                    <h3>冲刺</h3>
+                    <p>瞬间极速前进，快速穿越危险地带</p>
+                    <button class="buy-skill-btn" data-skill="dash" id="buy-dash">200 ⭐ 解锁</button>
+                </div>
+            </div>
+
+            <button class="btn btn-ghost" id="closeShopBtn">← 返回</button>
+        </div>
+
+        <!-- ===== 成长系统 ===== -->
+        <div id="growthScreen" class="screen" style="display:none;">
+            <!-- 标题 -->
+            <div style="font-size:16px; font-weight:900; color:#c084fc; margin-bottom:4px; letter-spacing:1px;">📈 角色成长</div>
+            
+            <!-- 经验条区域 -->
+            <div style="width:280px; margin-bottom:4px; text-align:center;">
+                <div style="width:100%; height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden; margin-bottom:3px;">
+                    <div id="growthExpFill" style="height:100%; background:linear-gradient(90deg,#f59e0b,#fbbf24); border-radius:4px; width:0%; transition:width 0.3s;"></div>
+                </div>
+                <div style="font-size:10px; color:rgba(255,255,255,0.6);">
+                    Lv.<span id="growthLevel" style="color:#f59e0b; font-weight:bold;">1</span>
+                    &nbsp;|&nbsp;
+                    <span id="growthExp">0</span> / <span id="growthExpToNext">100</span> EXP
+                    &nbsp;|&nbsp;
+                    <span style="color:#10b981;">属性点: <span id="growthStatPoints">0</span></span>
+                </div>
+            </div>
+
+            <!-- 5个属性卡片一行 -->
+            <div class="growth-grid">
+                <div class="growth-card" data-stat="jumpPower">
+                    <div class="growth-icon">🦘</div>
+                    <h3>跳跃强化</h3>
+                    <p>提升跳跃高度</p>
+                    <div class="growth-level">Lv.<span class="stat-level">0</span>/10</div>
+                    <button class="upgrade-btn" data-stat="jumpPower">升级 (1点)</button>
+                </div>
+                <div class="growth-card" data-stat="moveSpeed">
+                    <div class="growth-icon">⚡</div>
+                    <h3>疾风步</h3>
+                    <p>提升移动速度</p>
+                    <div class="growth-level">Lv.<span class="stat-level">0</span>/10</div>
+                    <button class="upgrade-btn" data-stat="moveSpeed">升级 (1点)</button>
+                </div>
+                <div class="growth-card" data-stat="shieldDuration">
+                    <div class="growth-icon">🛡️</div>
+                    <h3>护盾精通</h3>
+                    <p>延长护盾持续时间</p>
+                    <div class="growth-level">Lv.<span class="stat-level">0</span>/10</div>
+                    <button class="upgrade-btn" data-stat="shieldDuration">升级 (1点)</button>
+                </div>
+                <div class="growth-card" data-stat="energyRegen">
+                    <div class="growth-icon">🔋</div>
+                    <h3>能量恢复</h3>
+                    <p>加快技能能量恢复</p>
+                    <div class="growth-level">Lv.<span class="stat-level">0</span>/10</div>
+                    <button class="upgrade-btn" data-stat="energyRegen">升级 (1点)</button>
+                </div>
+                <div class="growth-card" data-stat="starValue">
+                    <div class="growth-icon">💰</div>
+                    <h3>财富之手</h3>
+                    <p>增加星星价值</p>
+                    <div class="growth-level">Lv.<span class="stat-level">0</span>/5</div>
+                    <button class="upgrade-btn" data-stat="starValue">升级 (2点)</button>
+                </div>
+            </div>
+            
+            <!-- 返回按钮 -->
+            <button class="btn btn-purple" id="closeGrowthBtn" style="margin-top:14px; padding:10px 36px; font-size:13px;">← 返回</button>
+        </div>
+
+        <!-- ===== 游戏结束 ===== -->
+        <div id="gameOverScreen" class="screen" style="display:none">
+            <div class="screen-title" style="font-size:36px">💀 游戏结束</div>
+            <div class="divider"></div>
+            <div id="highScore" class="highscore-tag" style="display:none">🏆 新纪录！</div>
+            <div class="stats-row">
+                <div class="stat-card">
+                    <span class="stat-value" id="finalScore">0</span>
+                    <div class="stat-label">总得分</div>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value" id="finalStars">0</span>
+                    <div class="stat-label">收集星星</div>
+                </div>
+            </div>
+            <div class="btn-row">
+                <button class="btn btn-orange" id="restartBtn">🔄 再来一次</button>
+                <button class="btn btn-ghost" id="menuBtn">🏠 返回主菜单</button>
+            </div>
+        </div>
+
+        <!-- ===== 关卡完成 ===== -->
+        <div id="levelCompleteScreen" class="screen" style="display:none">
+            <div class="screen-title" style="font-size:36px">🎉 关卡完成！</div>
+            <div class="divider"></div>
+            <div class="stats-row">
+                <div class="stat-card">
+                    <span class="stat-value" id="levelCompleteScore">0</span>
+                    <div class="stat-label">总得分</div>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value" id="levelCompleteStars">0</span>
+                    <div class="stat-label">收集星星</div>
+                </div>
+            </div>
+            <div class="btn-row">
+                <button class="btn btn-green" id="nextLevelBtn">下一关 →</button>
+                <button class="btn btn-orange" id="replayLevelBtn">🔄 再玩一次</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
